@@ -18,6 +18,13 @@ def docker(*args):
         print 'Error: {0} -> {1}'.format(' '.join(cmd), stderr)
     return stderr + stdout
 
+#
+# Docker output parsing helpers
+#
+
+#
+# Parses the output of a Docker PS command to a python List
+#
 def docker_ps_to_array(output):
     all = []
     for c in [line.split() for line in output.splitlines()[1:]]:
@@ -29,6 +36,9 @@ def docker_ps_to_array(output):
         all.append(each)
     return all
 
+
+# Additional function that
+# Parses the output of a Docker node command to a python Dictionary
 def docker_node_to_array(output):
     all = []
     for c in [line.split() for line in output.splitlines()[1:]]:
@@ -43,10 +53,12 @@ def docker_node_to_array(output):
             each['hostname'] = c[1]
             each["status"] = c[2]
             each["availabilty"] = c[3]
-
         all.append(each)
     return all
 
+#
+# Parses the output of a Docker logs command to a python Dictionary
+# (Key Value Pair object)
 def docker_logs_to_object(id, output):
     logs = {}
     logs['id'] = id
@@ -56,6 +68,9 @@ def docker_logs_to_object(id, output):
     logs['logs'] = all
     return logs
 
+#
+# Parses the output of a Docker image command to a python List
+#
 def docker_images_to_array(output):
     all = []
     for c in [line.split() for line in output.splitlines()[1:]]:
@@ -100,9 +115,9 @@ def containers_index():
 
 @app.route('/containers/<id>', methods=['GET'])
 def containers_show(id):
-    output = docker('inspect', id)
+    temp = docker('inspect', id)
 
-    resp = json.dumps(json.loads(output))
+    resp = json.dumps(json.loads(temp))
 
     return Response(response=resp, mimetype="application/json")
 
@@ -153,10 +168,10 @@ def containers_remove(id):
     ps = docker('ps')
     containers = docker_ps_to_array(ps) 
     if len(filter(lambda a: a.get('id') == id, containers)):
-        resp = 'the container %s is running' % id
+        resp = 'container named %s is running' % id
     else:
         docker('rm', id)
-        resp = 'the container %s is removed' % id
+        resp = 'container named %s is removed' % id
     return Response(response=resp, mimetype="application/json")
 
 @app.route('/containers', methods=['DELETE'])
@@ -165,17 +180,25 @@ def containers_remove_all():
     Force remove all containers - dangrous!
 
     """
-    for cont in docker('ps', '-a', '-q').split('\n'):
-        if cont:
+    for container in docker('ps', '-a', '-q').split('\n'):
+        if container:
             docker('stop', cont)
             docker('rm', cont)
-    resp = 'All containers are removed'
+    resp = 'All containers are removed successfully!'
     return Response(response=resp, mimetype="application/json")
 
 @app.route('/containers/<id>/logs', methods=['GET'])
 def containers_log(id):
-    output = docker('container', 'logs', id)
-    resp = json.dumps(docker_logs_to_object(id, output))
+    """
+
+    Dump specific conatainer logs
+    
+    """
+    temp = docker('container', 'logs', id)
+    """
+    dumps logs which equals to id.
+    """
+    resp = json.dumps(docker_logs_to_object(id, temp))
     return Response(response=resp, mimetype="application/json")
 
 @app.route('/services', methods=['GET'])
@@ -204,12 +227,14 @@ def images_create():
     curl -H 'Accept: application/json' -F file=@Dockerfile http://localhost:8080/images
 
     """
-    body = request.get_json(force=True)
-    dockerfile = body['file']
-
+    requestFile = request.get_json(force=True)
+    """
+    dockerfile = request.files['file']
+    otherwise, get_json first and using index, I can get dockerfile.
+    """
+    dockerfile = requestFile['file']
     docker('build', dockerfile)
-    
-    resp = 'the image built'
+    resp = 'the image is built.'
     return Response(response=resp, mimetype="application/json")
 
 # docker image tag d8bcf085ca53 test3:0.1
@@ -221,10 +246,14 @@ def images_update(id):
     curl -s -X PATCH -H 'Content-Type: application/json' http://localhost:8080/images/7f2619ed1768 -d '{"tag": "test:1.0"}'
 
     """
-    body = request.get_json(force=True)
-    name = body['tag']
+    requestFile = request.get_json(force=True)
+    name = requestFile['tag']
+
+
     docker('image', 'tag', id, name)
-    resp = 'the image updated'
+    
+    resp = 'the image is updated'
+    
     return Response(response=resp, mimetype="application/json")
 
 @app.route('/images/<id>', methods=['DELETE'])
@@ -243,13 +272,11 @@ def images_remove_all():
     Force remove all images - dangrous!
 
     """
-    ids = docker('images', '-q').split('\n')
-
+    ids = docker('images','-q').split('\n')
     for id in ids:
         if id:
             docker('rmi', '-f', id)
- 
-    resp = 'All of images are removed'
+    resp = 'All images are removed.'
     return Response(response=resp, mimetype="application/json")
    
 if __name__ == "__main__":
