@@ -12,3 +12,8 @@ At part 2-1, I used command like this.
 1. docker pull nginx
 2. docker service create --replicas 5 -p 80:80 --name web nginx
 3. docker service ps web
+
+
+my external IP is 35.195.217.205.
+
+
